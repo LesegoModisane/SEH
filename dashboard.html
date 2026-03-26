@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SEH — Workflow Adoption Monitoring Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #F0F2F5; color: #1A2332; font-size: 13px; }
+
+  /* ── HEADER ─────────────────────────────────────── */
+  .header {
+    background: linear-gradient(135deg, #1A3A66 0%, #1A5276 100%);
+    color: #fff; padding: 14px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .header-left h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.3px; }
+  .header-left p  { font-size: 11px; color: #A8C8F0; margin-top: 2px; }
+  .header-right   { display: flex; gap: 16px; align-items: center; }
+  .badge          { background: rgba(255,255,255,0.15); border-radius: 20px;
+                    padding: 4px 12px; font-size: 11px; color: #D0E8FF; }
+  .refresh-btn    { background: #2ECC71; color: #fff; border: none; border-radius: 6px;
+                    padding: 6px 14px; font-size: 11px; font-weight: 600; cursor: pointer; }
+
+  /* ── FILTER BAR ──────────────────────────────────── */
+  .filter-bar {
+    background: #fff; border-bottom: 1px solid #DDE3EC;
+    padding: 8px 28px; display: flex; gap: 12px; align-items: center;
+  }
+  .filter-label { font-size: 11px; font-weight: 600; color: #6B7A8D; }
+  .filter-chip  {
+    background: #EEF3FB; border: 1px solid #B8D0EE; border-radius: 16px;
+    padding: 3px 12px; font-size: 11px; color: #1A5276; cursor: pointer;
+    font-weight: 500;
+  }
+  .filter-chip.active { background: #1A5276; color: #fff; border-color: #1A5276; }
+
+  /* ── GRID LAYOUT ─────────────────────────────────── */
+  .dash { padding: 16px 28px 28px; }
+
+  /* Row */
+  .row { display: flex; gap: 16px; margin-bottom: 16px; }
+
+  /* ── CARD BASE ───────────────────────────────────── */
+  .card {
+    background: #fff; border-radius: 10px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    padding: 16px; flex: 1; min-width: 0;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #6B7A8D; margin-bottom: 2px;
+  }
+  .card-field {
+    font-size: 9px; color: #A0ADB8; margin-bottom: 10px;
+    font-style: italic;
+  }
+
+  /* ── KPI CARDS ───────────────────────────────────── */
+  .kpi-row { display: flex; gap: 16px; margin-bottom: 16px; }
+  .kpi {
+    background: #fff; border-radius: 10px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    padding: 16px 20px; flex: 1; min-width: 0;
+    border-top: 4px solid #ccc; position: relative;
+  }
+  .kpi.red    { border-top-color: #C0392B; }
+  .kpi.amber  { border-top-color: #E67E22; }
+  .kpi.blue   { border-top-color: #2980B9; }
+  .kpi.teal   { border-top-color: #16A085; }
+  .kpi.green  { border-top-color: #27AE60; }
+
+  .kpi-value { font-size: 34px; font-weight: 700; line-height: 1; }
+  .kpi.red   .kpi-value { color: #C0392B; }
+  .kpi.amber .kpi-value { color: #E67E22; }
+  .kpi.blue  .kpi-value { color: #2980B9; }
+  .kpi.teal  .kpi-value { color: #16A085; }
+  .kpi.green .kpi-value { color: #27AE60; }
+
+  .kpi-label  { font-size: 10px; font-weight: 700; color: #4A5568; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .kpi-target { font-size: 9.5px; color: #A0ADB8; margin-top: 2px; }
+  .kpi-field  { font-size: 8px; color: #BFC9D9; margin-top: 6px; font-style: italic; }
+  .kpi-delta  {
+    position: absolute; top: 14px; right: 14px;
+    font-size: 10px; font-weight: 700; padding: 2px 7px;
+    border-radius: 10px;
+  }
+  .kpi-delta.down { background: #FDEDEC; color: #C0392B; }
+  .kpi-delta.warn { background: #FDEBD0; color: #E67E22; }
+
+  /* ── FUNNEL CHART ────────────────────────────────── */
+  .funnel-bar { display: flex; align-items: center; margin-bottom: 6px; gap: 8px; }
+  .funnel-label { font-size: 10px; color: #4A5568; width: 210px; flex-shrink: 0; text-align: right; font-weight: 500; }
+  .funnel-track { flex: 1; background: #EEF3FB; border-radius: 4px; height: 26px; position: relative; overflow: hidden; }
+  .funnel-fill  { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; transition: width 0.4s; }
+  .funnel-fill span { font-size: 11px; font-weight: 700; color: #fff; }
+  .funnel-note  { font-size: 9px; color: #A0ADB8; width: 200px; flex-shrink: 0; font-style: italic; }
+  .target-line  { position: absolute; top: 0; width: 2px; background: #27AE60; height: 100%; }
+
+  /* ── HEATMAP ─────────────────────────────────────── */
+  .heatmap table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+  .heatmap th    { background: #1A3A66; color: #fff; padding: 7px 8px; font-size: 9.5px;
+                   font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .heatmap td    { padding: 6px 8px; border-bottom: 1px solid #EEF3FB; text-align: center; }
+  .heatmap tr:hover td { background: #F7FAFF; }
+  .heatmap .team-name { text-align: left; font-weight: 600; color: #1A3A66; }
+  .cell-red    { background: #FDEDEC; color: #C0392B; font-weight: 700; border-radius: 4px; }
+  .cell-amber  { background: #FDEBD0; color: #E67E22; font-weight: 700; border-radius: 4px; }
+  .cell-green  { background: #EAFAF1; color: #27AE60; font-weight: 700; border-radius: 4px; }
+
+  /* ── AGENT TABLE ─────────────────────────────────── */
+  .agent-tbl table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  .agent-tbl th  { background: #2C3E50; color: #fff; padding: 6px 8px; font-size: 9px;
+                   font-weight: 600; text-transform: uppercase; }
+  .agent-tbl td  { padding: 5px 8px; border-bottom: 1px solid #F0F2F5; }
+  .agent-tbl tr:nth-child(even) td { background: #F8FAFC; }
+  .rag-r { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #C0392B; }
+  .rag-a { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #E67E22; }
+  .rag-g { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #27AE60; }
+
+  /* ── TREND SPARKLINES ────────────────────────────── */
+  .sparkline-row { display: flex; gap: 12px; margin-bottom: 10px; align-items: flex-end; }
+  .spark-item { flex: 1; text-align: center; }
+  .spark-label { font-size: 9px; color: #6B7A8D; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+  .spark-bars  { display: flex; gap: 3px; align-items: flex-end; justify-content: center; height: 50px; }
+  .spark-bar   { width: 14px; border-radius: 2px 2px 0 0; position: relative; }
+  .spark-val   { font-size: 12px; font-weight: 700; margin-top: 4px; }
+
+  /* ── EXPERIENCE PANELS ───────────────────────────── */
+  .exp-grid { display: flex; gap: 12px; }
+  .exp-panel { flex: 1; background: #F8FAFC; border-radius: 8px; padding: 12px; border: 1px solid #DDE3EC; }
+  .exp-panel h4 { font-size: 10px; font-weight: 700; color: #4A5568; text-transform: uppercase; margin-bottom: 8px; }
+  .exp-compare { display: flex; gap: 8px; }
+  .exp-col     { flex: 1; text-align: center; padding: 10px 8px; border-radius: 6px; }
+  .exp-col.bad { background: #FDEDEC; }
+  .exp-col.good{ background: #EAFAF1; }
+  .exp-col .big  { font-size: 22px; font-weight: 700; }
+  .exp-col.bad  .big { color: #C0392B; }
+  .exp-col.good .big { color: #27AE60; }
+  .exp-col .sub  { font-size: 9px; color: #6B7A8D; margin-top: 2px; }
+  .exp-mult      { display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #E67E22; padding: 0 4px; }
+
+  /* ── FOOTER ──────────────────────────────────────── */
+  .dash-footer {
+    background: #1A3A66; color: #A8C8F0;
+    padding: 8px 28px; font-size: 10px;
+    display: flex; justify-content: space-between;
+  }
+  .section-divider {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    color: #A0ADB8; letter-spacing: 1px; margin-bottom: 6px;
+    padding-bottom: 4px; border-bottom: 1px solid #DDE3EC;
+  }
+
+  /* ── GAUGE ───────────────────────────────────────── */
+  .gauge-wrap { display: flex; gap: 10px; }
+  .gauge-item { flex: 1; text-align: center; }
+  .gauge-arc  { position: relative; width: 70px; height: 38px; overflow: hidden; margin: 0 auto 4px; }
+  .gauge-arc::before {
+    content: ''; position: absolute; bottom: 0; left: 0;
+    width: 70px; height: 70px; border-radius: 50%;
+    background: #EEF3FB;
+  }
+  .gauge-fill {
+    position: absolute; bottom: 0; left: 0;
+    width: 70px; height: 70px; border-radius: 50%;
+    background: conic-gradient(var(--gc) var(--gp), transparent 0);
+    clip-path: polygon(0 50%, 100% 50%, 100% 0, 0 0);
+  }
+  .gauge-center {
+    position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    font-size: 12px; font-weight: 700;
+  }
+  .gauge-label { font-size: 9px; color: #6B7A8D; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- HEADER                                                  -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="header">
+  <div class="header-left">
+    <h1>📊  SEH Workflow Adoption — Operations Dashboard</h1>
+    <p>Microsoft Dynamics 365 Customer Service Workspace  ·  Live view: all fields drawn from Dynamics Case entity</p>
+  </div>
+  <div class="header-right">
+    <span class="badge">Period: Wk 1–2 Post Go-Live</span>
+    <span class="badge">500 Cases  ·  5 Teams</span>
+    <span class="badge">Refresh: Daily 06:00</span>
+    <button class="refresh-btn">⟳ Refresh Now</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- FILTER BAR                                              -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="filter-bar">
+  <span class="filter-label">Filter by:</span>
+  <span class="filter-chip active">All Teams</span>
+  <span class="filter-chip">Team A — Admissions</span>
+  <span class="filter-chip">Team B — Finance</span>
+  <span class="filter-chip">Team C — Academic</span>
+  <span class="filter-chip">Team D — Technical</span>
+  <span class="filter-chip">Team E — Wellness</span>
+  <span style="margin-left:auto; font-size:9px; color:#A0ADB8;">Fields: Team · Agent · Created On · Week</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- DASHBOARD BODY                                          -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="dash">
+
+  <!-- ── ROW 1: KPI CARDS ─────────────────────────────── -->
+  <div class="section-divider">ROW 1  —  KEY PERFORMANCE INDICATORS</div>
+  <div class="kpi-row">
+
+    <div class="kpi red">
+      <div class="kpi-delta down">↓ vs target</div>
+      <div class="kpi-value">36%</div>
+      <div class="kpi-label">Full Workflow Adoption</div>
+      <div class="kpi-target">Target: ≥ 90%  ·  Gap: 54pp</div>
+      <div class="kpi-field">Fields: Queue + POPIA Verified + Resolution Template Used + Knowledge Article Linked</div>
+    </div>
+
+    <div class="kpi amber">
+      <div class="kpi-delta warn">↓ vs target</div>
+      <div class="kpi-value">72.1%</div>
+      <div class="kpi-label">SLA Met Rate</div>
+      <div class="kpi-target">Target: ≥ 95%  ·  Gap: 22.9pp</div>
+      <div class="kpi-field">Field: SLA Status (= 'Met')</div>
+    </div>
+
+    <div class="kpi red">
+      <div class="kpi-delta down">↓ wk-on-wk</div>
+      <div class="kpi-value">65.8%</div>
+      <div class="kpi-label">POPIA Compliance</div>
+      <div class="kpi-target">Target: 100%  ·  28% not recorded</div>
+      <div class="kpi-field">Field: POPIA Verified (= 'Yes')</div>
+    </div>
+
+    <div class="kpi blue">
+      <div class="kpi-value">441m</div>
+      <div class="kpi-label">Avg Resolution Time</div>
+      <div class="kpi-target">Median: 94 mins  ·  22 cases &gt;1,000m</div>
+      <div class="kpi-field">Field: Resolution Time (mins)</div>
+    </div>
+
+    <div class="kpi amber">
+      <div class="kpi-delta warn">↑ rising</div>
+      <div class="kpi-value">12.4%</div>
+      <div class="kpi-label">Complaint Rate</div>
+      <div class="kpi-target">62 flagged cases  ·  Target: &lt; 5%</div>
+      <div class="kpi-field">Field: Complaint Flag (= 'Yes')</div>
+    </div>
+
+    <div class="kpi teal">
+      <div class="kpi-value">73.6%</div>
+      <div class="kpi-label">QA Score Average</div>
+      <div class="kpi-target">176 evaluated cases  ·  Target: ≥ 80%</div>
+      <div class="kpi-field">Field: QA Score (%)</div>
+    </div>
+
+  </div>
+
+  <!-- ── ROW 2: ADOPTION FUNNEL + TEAM HEATMAP ─────────── -->
+  <div class="section-divider">ROW 2  —  ADOPTION DIAGNOSTIC</div>
+  <div class="row">
+
+    <!-- Funnel -->
+    <div class="card" style="flex:1.2">
+      <div class="card-title">Workflow Adoption Funnel — Step-by-Step Compliance</div>
+      <div class="card-field">Fields: Queue · POPIA Verified · Resolution Template Used · Knowledge Article Linked  (n=500 all cases; n=383 resolved)</div>
+
+      <div class="funnel-bar">
+        <div class="funnel-label">Step 1  Triage Queue Routing</div>
+        <div class="funnel-track">
+          <div class="funnel-fill" style="width:68.8%; background:#1A3A66;"><span>68.8%</span></div>
+          <div class="target-line" style="left:90%;"></div>
+        </div>
+        <div class="funnel-note">80 bypasses · 50 no queue</div>
+      </div>
+      <div class="funnel-bar">
+        <div class="funnel-label">Step 2  POPIA Verification</div>
+        <div class="funnel-track">
+          <div class="funnel-fill" style="width:65.8%; background:#2E86C1;"><span>65.8%</span></div>
+          <div class="target-line" style="left:90%;"></div>
+        </div>
+        <div class="funnel-note">140 not recorded · 31 explicit No</div>
+      </div>
+      <div class="funnel-bar">
+        <div class="funnel-label">Step 3  Resolution Template Used</div>
+        <div class="funnel-track">
+          <div class="funnel-fill" style="width:54%; background:#5DADE2;"><span>54.0%</span></div>
+          <div class="target-line" style="left:90%;"></div>
+        </div>
+        <div class="funnel-note">148 missing · 28 explicit No</div>
+      </div>
+      <div class="funnel-bar">
+        <div class="funnel-label">Step 4  Knowledge Article Linked</div>
+        <div class="funnel-track">
+          <div class="funnel-fill" style="width:52.7%; background:#85C1E9;"><span>52.7%</span></div>
+          <div class="target-line" style="left:90%;"></div>
+        </div>
+        <div class="funnel-note">154 missing · 27 explicit No</div>
+      </div>
+      <div class="funnel-bar" style="margin-top:6px;">
+        <div class="funnel-label" style="font-weight:700; color:#C0392B;">▶  FULL ADOPTION (all 4 steps)</div>
+        <div class="funnel-track" style="background:#FDEDEC;">
+          <div class="funnel-fill" style="width:36%; background:#C0392B;"><span>36.0%</span></div>
+          <div class="target-line" style="left:90%;"></div>
+        </div>
+        <div class="funnel-note" style="color:#C0392B; font-weight:600;">Target: 90% ↑  Gap: 54pp</div>
+      </div>
+
+      <div style="margin-top:8px; font-size:9px; color:#A0ADB8;">
+        <span style="color:#27AE60; font-weight:700;">│</span> = 90% target line
+      </div>
+    </div>
+
+    <!-- Team heatmap -->
+    <div class="card heatmap" style="flex:1.3">
+      <div class="card-title">Team Performance Heatmap</div>
+      <div class="card-field">Fields: Team · Queue · POPIA Verified · Resolution Template Used · SLA Status · Resolution Time (mins) · Complaint Flag</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left">Team</th>
+            <th>Cases</th>
+            <th>Full Adoption</th>
+            <th>Queue Compl.</th>
+            <th>POPIA Compl.</th>
+            <th>Template</th>
+            <th>SLA Breach</th>
+            <th>Avg Res (m)</th>
+            <th>Complaints</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="team-name">A — Admissions</td>
+            <td>97</td>
+            <td class="cell-amber">43.3%</td>
+            <td class="cell-amber">72.2%</td>
+            <td class="cell-amber">74.2%</td>
+            <td class="cell-amber">61.5%</td>
+            <td class="cell-amber">19.6%</td>
+            <td class="cell-red">665m</td>
+            <td class="cell-amber">11</td>
+          </tr>
+          <tr>
+            <td class="team-name" style="color:#C0392B;">⚠ B — Finance</td>
+            <td>133</td>
+            <td class="cell-red">18.8%</td>
+            <td class="cell-red">54.9%</td>
+            <td class="cell-red">46.6%</td>
+            <td class="cell-red">41.3%</td>
+            <td class="cell-amber">15.0%</td>
+            <td class="cell-green">177m</td>
+            <td class="cell-amber">15</td>
+          </tr>
+          <tr>
+            <td class="team-name">C — Academic</td>
+            <td>78</td>
+            <td class="cell-amber">43.6%</td>
+            <td class="cell-green">79.5%</td>
+            <td class="cell-amber">69.2%</td>
+            <td class="cell-amber">65.6%</td>
+            <td class="cell-red">26.9%</td>
+            <td class="cell-amber">405m</td>
+            <td class="cell-green">9</td>
+          </tr>
+          <tr>
+            <td class="team-name">D — Technical</td>
+            <td>83</td>
+            <td class="cell-amber">42.2%</td>
+            <td class="cell-amber">73.5%</td>
+            <td class="cell-green">75.9%</td>
+            <td class="cell-amber">58.1%</td>
+            <td class="cell-red">30.1%</td>
+            <td class="cell-amber">438m</td>
+            <td class="cell-green">9</td>
+          </tr>
+          <tr>
+            <td class="team-name">E — Wellness</td>
+            <td>109</td>
+            <td class="cell-amber">40.4%</td>
+            <td class="cell-amber">71.6%</td>
+            <td class="cell-amber">71.6%</td>
+            <td class="cell-red">52.3%</td>
+            <td class="cell-red">29.4%</td>
+            <td class="cell-red">618m</td>
+            <td class="cell-red">18</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:8px; display:flex; gap:12px; font-size:9px;">
+        <span><span class="rag-r"></span>&nbsp; &lt; threshold (action req.)</span>
+        <span><span class="rag-a"></span>&nbsp; approaching target (monitor)</span>
+        <span><span class="rag-g"></span>&nbsp; on/above target</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── ROW 3: AGENT DRILL-DOWN + WEEKLY TREND ─────────── -->
+  <div class="section-divider">ROW 3  —  AGENT DRILL-DOWN  &amp;  WEEK-ON-WEEK TREND</div>
+  <div class="row">
+
+    <!-- Agent table: bottom 8 -->
+    <div class="card agent-tbl" style="flex:1.4">
+      <div class="card-title">⚠ Lowest-Adoption Agents — Immediate Action Required</div>
+      <div class="card-field">Fields: Agent · Team · Queue · POPIA Verified · Resolution Template Used · Knowledge Article Linked · Complaint Flag</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Agent</th><th>Team</th><th>Cases</th>
+            <th>Full Adopt.</th><th>Queue</th><th>POPIA</th><th>Template</th><th>Complaints</th><th>RAG</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Agent_B8</td><td>B</td><td>18</td><td style="color:#C0392B;font-weight:700;">0.0%</td><td style="color:#C0392B;">27.8%</td><td style="color:#C0392B;">22.2%</td><td style="color:#C0392B;">13.3%</td><td>2</td><td><span class="rag-r"></span></td></tr>
+          <tr><td>Agent_E2</td><td>E</td><td>20</td><td style="color:#C0392B;font-weight:700;">0.0%</td><td style="color:#C0392B;">30.0%</td><td style="color:#C0392B;">30.0%</td><td style="color:#C0392B;">17.6%</td><td>6</td><td><span class="rag-r"></span></td></tr>
+          <tr><td>Agent_E3</td><td>E</td><td>18</td><td style="color:#C0392B;font-weight:700;">0.0%</td><td style="color:#C0392B;">22.2%</td><td style="color:#C0392B;">44.4%</td><td style="color:#C0392B;">13.3%</td><td>5</td><td><span class="rag-r"></span></td></tr>
+          <tr><td>Agent_C3</td><td>C</td><td>21</td><td style="color:#C0392B;font-weight:700;">0.0%</td><td style="color:#C0392B;">42.9%</td><td style="color:#C0392B;">19.0%</td><td style="color:#C0392B;">17.6%</td><td>1</td><td><span class="rag-r"></span></td></tr>
+          <tr><td>Agent_B4</td><td>B</td><td>28</td><td style="color:#C0392B;font-weight:700;">3.6%</td><td style="color:#E67E22;">50.0%</td><td style="color:#C0392B;">32.1%</td><td style="color:#C0392B;">15.0%</td><td>3</td><td><span class="rag-r"></span></td></tr>
+          <tr><td>Agent_A4</td><td>A</td><td>23</td><td style="color:#C0392B;font-weight:700;">4.3%</td><td style="color:#C0392B;">34.8%</td><td style="color:#E67E22;">47.8%</td><td style="color:#C0392B;">17.6%</td><td>1</td><td><span class="rag-r"></span></td></tr>
+          <tr><td>Agent_B7</td><td>B</td><td>21</td><td style="color:#C0392B;font-weight:700;">4.8%</td><td style="color:#E67E22;">42.9%</td><td style="color:#C0392B;">23.8%</td><td style="color:#C0392B;">18.8%</td><td>2</td><td><span class="rag-r"></span></td></tr>
+          <tr><td>Agent_D5</td><td>D</td><td>14</td><td style="color:#C0392B;font-weight:700;">7.1%</td><td style="color:#E67E22;">50.0%</td><td style="color:#C0392B;">35.7%</td><td style="color:#C0392B;">18.2%</td><td>3</td><td><span class="rag-r"></span></td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:8px; padding:6px 10px; background:#EAFAF1; border-radius:6px; font-size:9px; color:#1E5631;">
+        <b>Top performers for reference:</b> Agent_A6 (100%), Agent_E7 (83.3%), Agent_C4 (81.2%), Agent_B1 (80.0%), Agent_E6 (80.0%)
+      </div>
+    </div>
+
+    <!-- Week trend -->
+    <div class="card" style="flex:0.6">
+      <div class="card-title">Week-on-Week Trend</div>
+      <div class="card-field">Fields: Week · Queue · POPIA Verified · Resolution Template Used · Knowledge Article Linked · SLA Status</div>
+
+      <div style="margin-bottom:12px;">
+        <div style="font-size:9px; font-weight:700; color:#6B7A8D; text-transform:uppercase; margin-bottom:6px;">Adoption by Step</div>
+        <div style="display:flex; justify-content:space-between; font-size:9px; color:#A0ADB8; margin-bottom:4px;">
+          <span></span><span>Wk 1</span><span>Wk 2</span><span>Δ</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; padding:3px 0; border-bottom:1px solid #EEF3FB;">
+          <span style="color:#4A5568; width:130px;">Queue Routing</span>
+          <span style="font-weight:600;">69.4%</span>
+          <span style="font-weight:600;">68.0%</span>
+          <span style="color:#E67E22; font-weight:700;">↓ 1.4</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; padding:3px 0; border-bottom:1px solid #EEF3FB;">
+          <span style="color:#4A5568; width:130px;">POPIA Verified</span>
+          <span style="font-weight:600;">66.3%</span>
+          <span style="font-weight:600;">65.0%</span>
+          <span style="color:#E67E22; font-weight:700;">↓ 1.3</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; padding:3px 0; border-bottom:1px solid #EEF3FB;">
+          <span style="color:#4A5568; width:130px;">Template Used</span>
+          <span style="font-weight:600;">54.4%</span>
+          <span style="font-weight:600;">53.5%</span>
+          <span style="color:#E67E22; font-weight:700;">↓ 0.9</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; padding:3px 0; border-bottom:1px solid #EEF3FB;">
+          <span style="color:#4A5568; width:130px;">KA Linked</span>
+          <span style="font-weight:600;">57.1%</span>
+          <span style="font-weight:600; color:#C0392B;">46.5%</span>
+          <span style="color:#C0392B; font-weight:700;">↓ 10.6</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; padding:3px 0; background:#FDEDEC; border-radius:4px; padding:4px 6px; margin-top:4px;">
+          <span style="color:#C0392B; font-weight:700; width:130px;">Full Adoption</span>
+          <span style="font-weight:700; color:#C0392B;">37.8%</span>
+          <span style="font-weight:700; color:#C0392B;">33.5%</span>
+          <span style="color:#C0392B; font-weight:700;">↓ 4.3</span>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:9px; font-weight:700; color:#6B7A8D; text-transform:uppercase; margin-bottom:6px;">SLA Performance</div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; padding:3px 0;">
+          <span style="color:#4A5568; width:130px;">SLA Met Rate</span>
+          <span style="font-weight:600;">72.5%</span>
+          <span style="font-weight:600;">71.5%</span>
+          <span style="color:#E67E22; font-weight:700;">↓ 1.0</span>
+        </div>
+      </div>
+
+      <div style="margin-top:10px; padding:8px; background:#FFF3CD; border-radius:6px; font-size:9px; color:#856404; border-left:3px solid #E67E22;">
+        <b>Signal:</b> Every adoption metric declined week-on-week. No improvement in any measure. Early adoption decay — intervention required immediately.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── ROW 4: STUDENT EXPERIENCE ─────────────────────── -->
+  <div class="section-divider">ROW 4  —  STUDENT EXPERIENCE SIGNALS</div>
+  <div class="row">
+
+    <!-- Repeat contact panel -->
+    <div class="card" style="flex:1">
+      <div class="card-title">Repeat Contact Rate  →  Complaint Rate</div>
+      <div class="card-field">Fields: Repeat Contact · Complaint Flag</div>
+      <div class="exp-compare">
+        <div class="exp-col bad">
+          <div class="big">30.1%</div>
+          <div class="sub">Complaint rate</div>
+          <div class="sub" style="font-weight:700; margin-top:4px;">Repeat Contact = Yes</div>
+          <div class="sub">113 cases · 34 complaints</div>
+        </div>
+        <div class="exp-mult">4.2×</div>
+        <div class="exp-col good">
+          <div class="big">7.2%</div>
+          <div class="sub">Complaint rate</div>
+          <div class="sub" style="font-weight:700; margin-top:4px;">First Contact Only</div>
+          <div class="sub">387 cases · 28 complaints</div>
+        </div>
+      </div>
+      <div style="margin-top:8px; font-size:9px; color:#6B7A8D; font-style:italic;">
+        Repeat contacts = 22.6% of caseload but generate 54.8% of all complaints.
+      </div>
+    </div>
+
+    <!-- SLA breach panel -->
+    <div class="card" style="flex:1">
+      <div class="card-title">SLA Breach  →  Complaint Rate</div>
+      <div class="card-field">Fields: SLA Status · Complaint Flag · Resolution Time (mins)</div>
+      <div class="exp-compare">
+        <div class="exp-col bad">
+          <div class="big">28.2%</div>
+          <div class="sub">Complaint rate</div>
+          <div class="sub" style="font-weight:700; margin-top:4px;">SLA Breached</div>
+          <div class="sub">117 cases · 1,354m avg</div>
+        </div>
+        <div class="exp-mult">3.3×</div>
+        <div class="exp-col good">
+          <div class="big">8.6%</div>
+          <div class="sub">Complaint rate</div>
+          <div class="sub" style="font-weight:700; margin-top:4px;">SLA Met</div>
+          <div class="sub">302 cases · 197m avg</div>
+        </div>
+      </div>
+      <div style="margin-top:8px; font-size:9px; color:#6B7A8D; font-style:italic;">
+        22 cases &gt;1,000 mins are the primary SLA damage drivers — concentrated in Teams A, D, E.
+      </div>
+    </div>
+
+    <!-- QA + Template panel -->
+    <div class="card" style="flex:1">
+      <div class="card-title">Template Use  →  QA Score Impact</div>
+      <div class="card-field">Fields: Resolution Template Used · QA Score (%)</div>
+      <div class="exp-compare">
+        <div class="exp-col bad">
+          <div class="big">63.8%</div>
+          <div class="sub">Avg QA Score</div>
+          <div class="sub" style="font-weight:700; margin-top:4px;">No Template</div>
+          <div class="sub">Non-compliant cases</div>
+        </div>
+        <div class="exp-mult" style="flex-direction:column; gap:2px;">
+          <span>16.6pt</span>
+          <span style="font-size:10px;">gap</span>
+        </div>
+        <div class="exp-col good">
+          <div class="big">80.4%</div>
+          <div class="sub">Avg QA Score</div>
+          <div class="sub" style="font-weight:700; margin-top:4px;">Template Used</div>
+          <div class="sub">Compliant cases</div>
+        </div>
+      </div>
+      <div style="margin-top:8px; font-size:9px; color:#6B7A8D; font-style:italic;">
+        Note: QA scores only populated for 35.2% of cases — selection bias possible.
+      </div>
+    </div>
+
+    <!-- SLA outlier alert -->
+    <div class="card" style="flex:0.7">
+      <div class="card-title">⚠ SLA Outlier Alert</div>
+      <div class="card-field">Fields: Resolution Time (mins) · SLA Status · Team · Agent</div>
+      <div style="font-size:9px; color:#4A5568; margin-bottom:6px;">Cases exceeding 1,000 minutes resolution time:</div>
+      <div style="font-size:22px; font-weight:700; color:#C0392B; text-align:center;">22</div>
+      <div style="text-align:center; font-size:9px; color:#6B7A8D;">cases &gt; 1,000 mins</div>
+      <div style="margin-top:8px; font-size:10px;">
+        <div style="padding:3px 0; border-bottom:1px solid #EEF3FB; display:flex; justify-content:space-between;">
+          <span>Team A</span><span style="color:#C0392B; font-weight:600;">5 cases</span>
+        </div>
+        <div style="padding:3px 0; border-bottom:1px solid #EEF3FB; display:flex; justify-content:space-between;">
+          <span>Team C</span><span style="color:#C0392B; font-weight:600;">3 cases</span>
+        </div>
+        <div style="padding:3px 0; border-bottom:1px solid #EEF3FB; display:flex; justify-content:space-between;">
+          <span>Team D</span><span style="color:#C0392B; font-weight:600;">3 cases</span>
+        </div>
+        <div style="padding:3px 0; display:flex; justify-content:space-between;">
+          <span>Team E</span><span style="color:#C0392B; font-weight:600;">8 cases</span>
+        </div>
+      </div>
+      <div style="margin-top:8px; font-size:9px; color:#784212; background:#FDEBD0; padding:5px 8px; border-radius:4px;">
+        Max: 7,924 mins (CAS-10481). Trigger supervisor alert at 50% SLA threshold.
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- FOOTER                                                  -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="dash-footer">
+  <span>SEH Operations Dashboard  ·  Dynamics 365 Customer Service Workspace  ·  Case Entity View export</span>
+  <span>All fields: Case Number · Case Type · Team · Agent · Case Origin · Created On · Resolved On · Case Status · Queue · POPIA Verified · Resolution Template Used · Knowledge Article Linked · First Response Time (mins) · Resolution Time (mins) · SLA Status · Repeat Contact · QA Score (%) · Complaint Flag · Week</span>
+  <span>Refresh: Daily 06:00  ·  Data owner: Head: Enablement, Automation &amp; Quality</span>
+</div>
+
+</body>
+</html>
